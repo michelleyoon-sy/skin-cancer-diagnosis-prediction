@@ -2,11 +2,11 @@
 
 This project focuses on predicting skin cancer status (Benign vs. Malignant) using statistical learning and machine learning methods. Developed as part of the *STATS 101C: Introduction to Statistical Models and Data Mining* course at UCLA, our team achieved 4th Place in the Kaggle competition with a final predictive accuracy of 0.60750. 
 
+https://www.kaggle.com/competitions/predicting-skin-cancer-status
+
 ## Overview
 
 Early detection of skin cancer is vital for improving survival rates, yet clinical data often contains complex patterns and significant missingness. This project utilizes a medical dataset, consisting of 50,000 training and 20,000 testing observations, to identify key predictors and build a robust classification model. Our approach prioritizes statistical rigor, effective imputation of medical data, and the balance between model complexity and interpretability.
-
-https://www.kaggle.com/competitions/predicting-skin-cancer-status
 
 ## Key Challenges
 
