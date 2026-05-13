@@ -1,6 +1,6 @@
 # skin-cancer-diagnosis-prediction
 
-This project focuses on predicting skin cancer status (Benign vs. Malignant) using statistical learning and machine learning methods. Developed as part of the *STATS 101C: Introduction to Statistical Models and Data Mining* course, our team achieved 4th Place in the Kaggle competition with a final predictive accuracy of 0.60750. 
+This project focuses on predicting skin cancer status (Benign vs. Malignant) using statistical learning and machine learning methods. Developed as part of the *STATS 101C: Introduction to Statistical Models and Data Mining* course at UCLA, our team achieved 4th Place in the Kaggle competition with a final predictive accuracy of 0.60750. 
 
 ## Overview
 
