@@ -45,7 +45,7 @@ Our final model demonstrated that while complex models like Random Forest are po
 
 ## Collaboration
 
-Developed collaboratively by Vidusha Adira, Maggie Cheung, Aashima Khanna, and Allison Seteono.
+Developed collaboratively with Vidusha Adira, Maggie Cheung, Aashima Khanna, and Allison Seteono.
 
 While we all contributed to EDA and model development, I primarily focused on the model developmen with a particular emphasis on implementing the Regularized GLM and Random Forest.
 
