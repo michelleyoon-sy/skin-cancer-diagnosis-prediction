@@ -1,0 +1,316 @@
+---
+title: "Final Paper Submission"
+output: pdf_document
+date: "2025-12-15"
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(Amelia)
+library(glmnet)
+library(pROC)
+library(caret)
+library(scales)
+```
+
+
+# EDA
+
+## Data
+```{r}
+train <- read.csv("~/Downloads/trainCancerTrain.csv")
+test <- read.csv("~/Downloads/trainCancerTestNoY.csv")
+dim(test)
+train <- train[-1]
+test<- test[-1]
+head(train,20)
+```
+
+## Missing Value Analysis
+```{r}
+sum(is.na(train))
+colSums(is.na(train))
+sum(is.na(train))/ (nrow(train)*ncol(train))
+
+sum(is.na(test))
+colSums(is.na(test))
+sum(is.na(test))/ (nrow(test)*ncol(test))
+```
+
+```{r}
+missmap(train)
+missmap(test)
+```
+
+```{r}
+predictors <- train[, setdiff(names(train), "Cancer")]
+
+sum(sapply(predictors, is.numeric))
+sum(sapply(predictors, is.character))
+```
+
+## Numerical to Categorical
+```{r}
+train$BMI <- cut(
+  train$BMI,
+  breaks = c(0, 18.5, 24.9, 29.9, 50),
+  labels = c("Underweight", "Normal", "Overweight", "Obese"),
+  right = TRUE
+)
+
+train$BMI <- as.factor(train$BMI)
+
+test$BMI <- cut(
+  test$BMI,
+  breaks = c(0, 18.5, 24.9, 29.9, 50),
+  labels = c("Underweight", "Normal", "Overweight", "Obese"),
+  right = TRUE
+)
+
+test$BMI <- as.factor(test$BMI) 
+```
+
+```{r}
+train$income <- cut(
+  train$income,
+  breaks = c(0, 56600, 169000, Inf),
+  labels = c("Low", "Middle", "Upper"),
+  right = TRUE
+)
+train$income <- as.factor(train$income)
+
+test$income <- cut(
+  test$income,
+  breaks = c(0, 56600, 169000, Inf),
+  labels = c("Low", "Middle", "Upper"),
+  right = TRUE
+)
+test$income <- as.factor(test$income)
+```
+
+## Numerical Predictors
+```{r}
+num_cols <- names(train)[sapply(train, is.numeric)]
+for (col in num_cols) {
+  print(
+    ggplot(train_train, aes_string(x = col, color = "Cancer")) +
+      geom_density(alpha = 0.6) +
+      labs(
+        title = paste("Density of", col, "by Cancer"),
+        x = col,
+        y = "Density",
+        fill = "Class"
+      )
+  )
+}
+```
+
+```{r}
+num_vars <- train %>%
+  select(where(is.numeric), -Cancer) %>%
+  names()
+
+for (v in num_vars) {
+  p <- ggplot(train, aes(x = Cancer, y = .data[[v]])) +
+    geom_boxplot(fill = "skyblue", alpha = 0.6) +
+    labs(
+      title = paste("Boxplot of", v, "by Cancer Status"),
+      x = "Cancer",
+      y = v
+    )
+  
+  print(p)
+}
+```
+
+```{r}
+anova_results <- sapply(num_vars, function(v) {
+  summary(aov(train[[v]] ~ train$Cancer))[[1]]["Pr(>F)"][1]
+})
+sorted_anova <- sort(unlist(anova_results))
+sorted_anova
+```
+
+## Categorical Predictors
+```{r}
+train[] <- lapply(train, function(x) if (is.character(x)) as.factor(x) else x)
+test[] <- lapply(test, function(x) if (is.character(x)) as.factor(x) else x)
+
+cat_vars <- names(train)[sapply(train, is.factor)]
+cat_vars <- setdiff(cat_vars, "Cancer")
+
+library(ggplot2)
+
+for (var in cat_vars) {
+  print(
+    ggplot(train, aes(x = .data[[var]], fill = Cancer)) +
+      geom_bar(position = "fill") +
+      scale_y_continuous(labels = scales::percent) +
+      labs(
+        title = paste("Stacked Bar Chart of", var, "by Cancer"),
+        x = var,
+        y = "Proportion"
+      )
+  )
+}
+```
+```{r}
+str(train)
+```
+
+## Chi-Squared Test
+```{r}
+chisq_results <- sapply(cat_vars, function(var) {
+  tbl <- table(train[[var]], train$Cancer)
+  chisq.test(tbl)$p.value
+})
+
+sort(chisq_results)
+```
+
+
+# GLM
+
+```{r}
+train <- read.csv("trainCancerTrain.csv", row.names = 1, stringsAsFactors = FALSE)
+test <- read.csv("trainCancerTestNoY.csv", row.names = 1, stringsAsFactors = FALSE)
+
+train$Cancer <- as.factor(train$Cancer)
+```
+
+## Variable Selection
+
+```{r}
+train <- train[ c("age", "avg_daily_uv", "number_of_lesions", "sunburns_last_year",
+  "lesion_size_mm", "sunscreen_spf", "years_lived_at_address", "family_history", "train_tone", "sunscreen_freq",
+  "immunosuppressed", "outdoor_job", "occupation", "tanning_bed_use", "desk_height_cm", 
+  "clothing_protection", "train_photosensitivity", "hat_use", "distance_from_beach_km", "Cancer")]
+
+test <- test[ c("age", "avg_daily_uv", "number_of_lesions", "sunburns_last_year",
+  "lesion_size_mm", "sunscreen_spf", "years_lived_at_address", "family_history", "train_tone", "sunscreen_freq",
+  "immunosuppressed", "outdoor_job", "occupation", "tanning_bed_use", "desk_height_cm", 
+  "clothing_protection", "train_photosensitivity", "hat_use", "distance_from_beach_km")]
+```
+
+## Imputation
+
+```{r}
+# numeric: mean impute + scaling
+# categorical: distinct category
+
+set.seed(2025)
+
+train$.y <- ifelse(train$Cancer == "Malignant", 1L, 0L)
+y_train <- train$.y
+
+num_cols <- names(train)[sapply(train, is.numeric)]
+num_cols <- setdiff(num_cols, ".y")   # remove label if present
+
+cat_cols <- names(train)[sapply(train, function(x) is.character(x) || is.factor(x))]
+cat_cols <- setdiff(cat_cols, c("Cancer"))
+```
+
+```{r}
+num_mean <- sapply(train[num_cols], function(x) mean(x, na.rm = TRUE))
+
+for (v in num_cols) {
+  train[[v]][is.na(train[[v]])] <- num_mean[[v]]
+  test[[v]][is.na(test[[v]])]  <- num_mean[[v]]
+}
+
+for (v in cat_cols) {
+  train[[v]][is.na(train[[v]])] <- "data not available"
+  test[[v]][is.na(test[[v]])]  <- "data not available"
+}
+```
+
+## Scale
+
+```{r}
+scale_pp <- preProcess(train[num_cols], method = c("center", "scale"))
+train_scaled_nums <- predict(scale_pp, train[num_cols])
+test_scaled_nums  <- predict(scale_pp, test[num_cols])
+
+train_scaled <- train
+test_scaled  <- test
+
+train_scaled[num_cols] <- train_scaled_nums
+test_scaled[num_cols]  <- test_scaled_nums
+
+predictor_vars <- setdiff(names(train_scaled), c("Cancer", ".y"))
+
+fmla_no_y <- as.formula(paste0("~", paste(predictor_vars, collapse = " + "), " -1"))
+x_train <- model.matrix(fmla_no_y, data = train_scaled)
+x_test  <- model.matrix(fmla_no_y, data = test_scaled)
+
+common_cols <- intersect(colnames(x_train), colnames(x_test))
+x_train <- x_train[, common_cols, drop = FALSE]
+x_test  <- x_test[, common_cols, drop = FALSE]
+
+y_train <- as.numeric(train_scaled$.y)
+```
+
+```{r}
+for (col in cat_cols) {
+  p <- ggplot(train_scaled, aes(x = .data[[col]], fill = Cancer)) +
+    geom_bar(position = "fill") + 
+    scale_y_continuous(labels = scales::percent) + 
+    labs(title = paste("Distribution by", col), x = col, fill = "Cancer") +
+    theme_minimal()
+  
+  print(p) 
+}
+```
+
+```{r}
+for (col in num_cols) {
+  p <- ggplot(train_scaled, aes(x = .data[[col]], fill = factor(Cancer))) + 
+    geom_boxplot(alpha = 0.5) +
+    labs(title = paste("Distribution by", col), 
+         x = col, 
+         fill = "Cancer Status") +
+    theme_minimal()
+  
+  print(p)
+}
+```
+
+## Elastic Net
+
+```{r}
+cvfit <- cv.glmnet(
+  x = x_train,
+  y = y_train,
+  family = "binomial",
+  alpha = 0.5,
+  nfolds = 10,
+  type.measure = "auc",
+  standardize = TRUE
+)
+
+best_lambda <- cvfit$lambda.min
+cat("Selected lambda:", best_lambda, "\n")
+```
+
+## Final Model
+
+```{r}
+final_fit <- glmnet(x_train, y_train, family = "binomial", alpha = 0.5, lambda = best_lambda, standardize = TRUE)
+final_fit$beta
+```
+
+## Accuracy
+
+```{r}
+pred_prob_train <- as.vector(predict(final_fit, x_train, type = "response")[,1])
+pred_class_train <- ifelse(pred_prob_train > 0.5, "Malignant", "Benign")
+train_auc <- as.numeric(auc(roc(y_train, pred_prob_train)))
+train_acc <- mean(pred_class_train == train_scaled$Cancer)
+
+cat("Train AUC:", round(train_auc, 4), "\n")
+cat("Train Accuracy (0.5):", round(train_acc, 4), "\n")
+
+pred_prob_test <- as.vector(predict(final_fit, x_test, type = "response")[,1])
+pred_class_test <- ifelse(pred_prob_test > 0.5, "Malignant", "Benign")
+```
